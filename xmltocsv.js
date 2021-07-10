@@ -1,6 +1,4 @@
 "use strict";
-
-const _ = require("lodash");
 const sax = require("sax");
 const dottie = require("dottie");
 const stream = require("stream");
@@ -48,7 +46,7 @@ module.exports = function (input) {
 		if (tagName === input.rootXMLElement) {
 			output.push(writeRecordToStream(currentObj, input.headerMap, comma));
 			count++;
-			if(count%500){
+			if(count%500 == 0){
 				console.log(`Inserted ${count}`)
 			}
 			accepting = false;
@@ -82,9 +80,16 @@ function writeHeadersToStream(headerMap, comma) {
 function writeRecordToStream(record, headerMap, comma) {
 	let recordString = "";
 	for (let [idx, header] of headerMap.entries()) {
-		let field = _.isObject(record[header[3]]) ?
-			record[header[3]][header[0]] :
-			record[header[0]];
+		let field= '';
+		if(header.length == 4){
+			if(record[header[3]]){
+				field = record[header[3]][header[0]];
+			}
+		} else {
+			if(record[header[0]]){
+				field = record[header[0]];
+			}
+		}
 		if(header.length == 5){
 			if(record[header[3]]){
 				field = record[header[3]][header[4]][header[0]]

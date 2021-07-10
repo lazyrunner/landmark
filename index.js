@@ -1,8 +1,10 @@
+const AWS = require('aws-sdk');
 const fs = require("fs");
 const xmlcsv = require("./xmltocsv");
 var parseString = require('xml2js').parseString;
 const axios = require('axios');
 var unzipper = require('unzipper');
+const stream = require('stream');
 
 async function makeAPICall() {
     let res = await axios('https://registers.esma.europa.eu/solr/esma_registers_firds_files/select?q=*&fq=publication_date:%5B2021-01-17T00:00:00Z+TO+2021-01-19T23:59:59Z%5D&wt=xml&indent=true&start=0&rows=100')
@@ -11,6 +13,15 @@ async function makeAPICall() {
     }
     return null;
 }
+
+const uploadStream = ({ Bucket, Key }) => {
+    const s3 = new AWS.S3();
+    const pass = new stream.PassThrough();
+    return {
+      writeStream: pass,
+      promise: s3.upload({ Bucket, Key, Body: pass }).promise(),
+    };
+  }
 
 async function parseXMLtoFetchLink() {
     let link = '';
@@ -48,6 +59,7 @@ function downloadXMLFile() {
                 url: link,
                 responseType: 'stream',
             }).then(async response => {
+                 const { writeStream, promise } = uploadStream({Bucket: 'landmark', Key: 'landmarkData.csv'});
                  let streams = xmlcsv({
                     source: response.data.pipe(unzipper.ParseOne()),
                     rootXMLElement: "FinInstrm",
@@ -60,10 +72,16 @@ function downloadXMLFile() {
                         ["Issr", "Issr", "string","TermntdRcrd"],
                         ["textNode", "TtlIssdNmnlAmt", "string","TermntdRcrd","DebtInstrmAttrbts","TtlIssdNmnlAmt"],
                     ]
-                }).pipe(fs.createWriteStream("./files/landmarkData.csv"));
+                }).pipe(writeStream);
                 streams.on("finish",()=>{
-                    resolve('File has been Downloaded');
+                    console.log("File finsihed writing ")
                 });
+                promise.then(() => {
+                    console.log('upload completed successfully');
+                    resolve('File has been Downloaded');
+                  }).catch((err) => {
+                    console.log('upload failed.', err.message);
+                  });
                 
             });
         } else {
@@ -83,3 +101,4 @@ exports.handler = async (event) => {
     };
     return response;
 };
+
