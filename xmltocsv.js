@@ -48,6 +48,9 @@ module.exports = function (input) {
 		if (tagName === input.rootXMLElement) {
 			output.push(writeRecordToStream(currentObj, input.headerMap, comma));
 			count++;
+			if(count%500){
+				console.log(`Inserted ${count}`)
+			}
 			accepting = false;
 			currentObj = {};
 		} else {
@@ -59,7 +62,6 @@ module.exports = function (input) {
 		output.push(null);
 		const msg = `Finished writing records: ${count}`
 		console.log(msg);
-
 		return msg;
 	});
 

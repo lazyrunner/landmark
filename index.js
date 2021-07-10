@@ -48,7 +48,7 @@ function downloadXMLFile() {
                 url: link,
                 responseType: 'stream',
             }).then(async response => {
-                 xmlcsv({
+                 let streams = xmlcsv({
                     source: response.data.pipe(unzipper.ParseOne()),
                     rootXMLElement: "FinInstrm",
                     headerMap: [
@@ -61,7 +61,10 @@ function downloadXMLFile() {
                         ["textNode", "TtlIssdNmnlAmt", "string","TermntdRcrd","DebtInstrmAttrbts","TtlIssdNmnlAmt"],
                     ]
                 }).pipe(fs.createWriteStream("./files/landmarkData.csv"));
-                resolve('File has been Downloaded');
+                streams.on("finish",()=>{
+                    resolve('File has been Downloaded');
+                });
+                
             });
         } else {
             console.error("Unable to fetch link");
@@ -73,7 +76,7 @@ function downloadXMLFile() {
 }
 
 exports.handler = async (event) => {
-    downloadXMLFile();
+    await downloadXMLFile();
     const response = {
         statusCode: 200,
         body: JSON.stringify('File has been saved'),
