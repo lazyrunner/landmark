@@ -7,6 +7,7 @@ var unzipper = require('unzipper');
 const stream = require('stream');
 
 async function makeAPICall() {
+    console.log("Fetching File with DLTINS link.");
     let res = await axios('https://registers.esma.europa.eu/solr/esma_registers_firds_files/select?q=*&fq=publication_date:%5B2021-01-17T00:00:00Z+TO+2021-01-19T23:59:59Z%5D&wt=xml&indent=true&start=0&rows=100')
     if (res.status == 200) {
         return res.data
@@ -18,17 +19,16 @@ const uploadStream = ({ Bucket, Key }) => {
     const s3 = new AWS.S3();
     const pass = new stream.PassThrough();
     return {
-      writeStream: pass,
-      promise: s3.upload({ Bucket, Key, Body: pass }).promise(),
+        writeStream: pass,
+        promise: s3.upload({ Bucket, Key, Body: pass }).promise(),
     };
-  }
+}
 
 async function parseXMLtoFetchLink() {
     let link = '';
     var xmlData = await makeAPICall();
-    console.log("got xmlData");
     if (xmlData) {
-        console.log("got xmlData");
+        console.log("Fetching Link from downloaded file.");
         return new Promise((resolve, reject) => {
             parseString(xmlData, function (err, result) {
                 if (err) {
@@ -52,37 +52,36 @@ async function parseXMLtoFetchLink() {
 function downloadXMLFile() {
     return new Promise(async (resolve, reject) => {
         let link = await parseXMLtoFetchLink();
-        console.log(link);
+        console.log('Link Fetched ', link);
         if (link) {
+            console.log('Downloading file -> Unzipping -> Parsing XML -> Uploading to S3');
             axios({
                 method: 'get',
                 url: link,
                 responseType: 'stream',
             }).then(async response => {
-                 const { writeStream, promise } = uploadStream({Bucket: 'landmark', Key: 'landmarkData.csv'});
-                 let streams = xmlcsv({
+                const { writeStream, promise } = uploadStream({ Bucket: process.env.BUCKET, Key: process.env.FILE });
+                let streams = xmlcsv({
                     source: response.data.pipe(unzipper.ParseOne()),
                     rootXMLElement: "FinInstrm",
+                    delimiter: '|',
                     headerMap: [
-                        ["Id", "FinInstrmGnlAttrbts.Id", "string","TermntdRcrd","FinInstrmGnlAttrbts"],
-                        ["FullNm", "FinInstrmGnlAttrbts.FullNm", "string","TermntdRcrd","FinInstrmGnlAttrbts"],
-                        ["ClssfctnTp", "FinInstrmGnlAttrbts.ClssfctnTp", "string","TermntdRcrd","FinInstrmGnlAttrbts"],
-                        ["CmmdtyDerivInd", "FinInstrmGnlAttrbts.CmmdtyDerivInd", "string","TermntdRcrd","FinInstrmGnlAttrbts"],
-                        ["NtnlCcy", "FinInstrmGnlAttrbts.NtnlCcy", "string","TermntdRcrd","FinInstrmGnlAttrbts"],
-                        ["Issr", "Issr", "string","TermntdRcrd"],
-                        ["textNode", "TtlIssdNmnlAmt", "string","TermntdRcrd","DebtInstrmAttrbts","TtlIssdNmnlAmt"],
+                        ["Id", "FinInstrmGnlAttrbts.Id", "string", "TermntdRcrd", "FinInstrmGnlAttrbts"],
+                        ["FullNm", "FinInstrmGnlAttrbts.FullNm", "string", "TermntdRcrd", "FinInstrmGnlAttrbts"],
+                        ["ClssfctnTp", "FinInstrmGnlAttrbts.ClssfctnTp", "string", "TermntdRcrd", "FinInstrmGnlAttrbts"],
+                        ["CmmdtyDerivInd", "FinInstrmGnlAttrbts.CmmdtyDerivInd", "string", "TermntdRcrd", "FinInstrmGnlAttrbts"],
+                        ["NtnlCcy", "FinInstrmGnlAttrbts.NtnlCcy", "string", "TermntdRcrd", "FinInstrmGnlAttrbts"],
+                        ["Issr", "Issr", "string", "TermntdRcrd"],
+                        ["TtlIssdNmnlAmt", "TtlIssdNmnlAmt", "string", "TermntdRcrd", "DebtInstrmAttrbts"],
                     ]
                 }).pipe(writeStream);
-                streams.on("finish",()=>{
-                    console.log("File finsihed writing ")
-                });
                 promise.then(() => {
-                    console.log('upload completed successfully');
+                    console.log('Upload completed successfully');
                     resolve('File has been Downloaded');
-                  }).catch((err) => {
+                }).catch((err) => {
                     console.log('upload failed.', err.message);
-                  });
-                
+                });
+
             });
         } else {
             console.error("Unable to fetch link");
@@ -94,11 +93,19 @@ function downloadXMLFile() {
 }
 
 exports.handler = async (event) => {
-    await downloadXMLFile();
-    const response = {
-        statusCode: 200,
-        body: JSON.stringify('File has been saved'),
-    };
-    return response;
+    try {
+        await downloadXMLFile();
+        const response = {
+            statusCode: 200,
+            body: JSON.stringify('File has been saved'),
+        };
+        return response;
+    } catch(e){
+        const response = {
+            statusCode: 400,
+            body: JSON.stringify('An Error has occured.'),
+        };
+    }
+    
 };
 

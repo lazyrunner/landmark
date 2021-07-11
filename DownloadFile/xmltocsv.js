@@ -91,7 +91,7 @@ function writeRecordToStream(record, headerMap, comma) {
 			}
 		}
 		if(header.length == 5){
-			if(record[header[3]]){
+			if(record[header[3]] && record[header[3]][header[4]]){
 				field = record[header[3]][header[4]][header[0]]
 			}
 			
